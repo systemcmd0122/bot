@@ -1,0 +1,21 @@
+{
+  "name": "hinansaba-bot",
+  "version": "1.0.0",
+  "description": "Discord bot for Hinansaba",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "deploy": "node deploy-commands.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@discordjs/rest": "^2.6.0",
+    "discord-api-types": "^0.37.120",
+    "discord.js": "^14.25.1",
+    "dotenv": "^16.6.1",
+    "express": "^5.2.1"
+  }
+}
