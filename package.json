@@ -1,0 +1,18 @@
+{
+  "name": "hinansaba-discord-bot",
+  "version": "1.0.0",
+  "description": "Discord verification and ban management bot",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js"
+  },
+  "dependencies": {
+    "@discordjs/rest": "^2.4.0",
+    "discord-api-types": "^0.37.119",
+    "discord.js": "^14.17.3",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2"
+  }
+}
