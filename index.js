@@ -12,7 +12,7 @@ const __dirname = path.dirname(__filename);
 
 // --- Express Server Setup for Keep-Alive ---
 const app = express();
-const PORT = process.env.PORT || 8000;
+const PORT = process.env.PORT || 8080;
 
 app.use(express.json());
 
@@ -213,13 +213,6 @@ client.once('ready', async () => {
     console.log(`[INFO] Serving ${client.guilds.cache.size} guild(s)`);
     console.log('='.repeat(50));
     
-    // Start Express server
-    app.listen(PORT, () => {
-        console.log(`[SUCCESS] Web server started on port ${PORT}`);
-        console.log(`[INFO] Health check available at http://localhost:${PORT}/health`);
-        console.log(`[INFO] Ping endpoint available at http://localhost:${PORT}/ping`);
-    });
-
     // Deploy commands on startup
     await deployCommands();
 
@@ -297,9 +290,23 @@ process.on('SIGTERM', () => {
     process.exit(0);
 });
 
-// --- Login ---
-console.log('[INFO] Starting bot...');
-client.login(token).catch(error => {
-    console.error('[ERROR] Failed to login:', error);
-    process.exit(1);
+// --- Start Express Server ---
+app.listen(PORT, () => {
+    console.log(`[SUCCESS] Web server started on port ${PORT}`);
+    console.log(`[INFO] Health check available at http://localhost:${PORT}/health`);
+    console.log(`[INFO] Ping endpoint available at http://localhost:${PORT}/ping`);
 });
+
+// --- Login with Retry Mechanism ---
+async function startBot() {
+    console.log('[INFO] Starting bot...');
+    try {
+        await client.login(token);
+    } catch (error) {
+        console.error('[ERROR] Failed to login:', error.message);
+        console.log('[INFO] Retrying in 30 seconds...');
+        setTimeout(startBot, 30000);
+    }
+}
+
+startBot();

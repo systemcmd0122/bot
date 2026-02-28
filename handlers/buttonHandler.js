@@ -219,15 +219,31 @@ async function handleDenial(interaction, userId) {
 export async function handleButtonInteraction(interaction) {
     const { customId } = interaction;
 
-    if (customId === 'verify_user_button') {
-        await handleVerifyUser(interaction);
-    } else if (customId.startsWith('approve_user:')) {
-        const userId = customId.split(':')[1];
-        await handleApproval(interaction, userId);
-    } else if (customId.startsWith('deny_user:')) {
-        const userId = customId.split(':')[1];
-        await handleDenial(interaction, userId);
-    } else {
-        console.warn(`[WARNING] Unknown button interaction: ${customId}`);
+    try {
+        console.log(`[INFO] Button clicked: ${customId} by ${interaction.user.tag} (${interaction.user.id})`);
+
+        if (customId === 'verify_user_button') {
+            await handleVerifyUser(interaction);
+        } else if (customId.startsWith('approve_user:')) {
+            const userId = customId.split(':')[1];
+            await handleApproval(interaction, userId);
+        } else if (customId.startsWith('deny_user:')) {
+            const userId = customId.split(':')[1];
+            await handleDenial(interaction, userId);
+        } else {
+            console.warn(`[WARNING] Unknown button interaction: ${customId}`);
+            if (!interaction.replied && !interaction.deferred) {
+                await interaction.reply({ content: '不明なボタンが押されました。', flags: 64 });
+            }
+        }
+    } catch (error) {
+        console.error(`[ERROR] Error handling button ${customId}:`, error);
+
+        const errorMessage = 'ボタン操作中にエラーが発生しました。';
+        if (!interaction.replied && !interaction.deferred) {
+            await interaction.reply({ content: errorMessage, flags: 64 }).catch(() => {});
+        } else {
+            await interaction.followUp({ content: errorMessage, flags: 64 }).catch(() => {});
+        }
     }
 }
