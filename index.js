@@ -239,14 +239,14 @@ client.on('interactionCreate', async interaction => {
                 await handleCommandInteraction(interaction);
             } else {
                 console.error('[ERROR] commandHandler not loaded');
-                await interaction.reply({ content: 'エラーが発生しました。', flags: 64 });
+                await interaction.reply({ content: 'エラーが発生しました。', ephemeral: true });
             }
         } else if (interaction.isButton()) {
             if (handleButtonInteraction) {
                 await handleButtonInteraction(interaction);
             } else {
                 console.error('[ERROR] buttonHandler not loaded');
-                await interaction.reply({ content: 'エラーが発生しました。', flags: 64 });
+                await interaction.reply({ content: 'エラーが発生しました。', ephemeral: true });
             }
         }
     } catch (error) {
@@ -255,7 +255,7 @@ client.on('interactionCreate', async interaction => {
         if (!interaction.replied && !interaction.deferred) {
             await interaction.reply({ 
                 content: 'エラーが発生しました。', 
-                flags: 64
+                ephemeral: true
             }).catch(console.error);
         }
     }

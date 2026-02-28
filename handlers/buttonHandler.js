@@ -20,18 +20,18 @@ async function handleVerifyUser(interaction) {
     if (!MODERATION_CHANNEL_ID || !VERIFIED_ROLE_ID) {
         return interaction.reply({ 
             content: 'エラー: 認証システムの設定が不完全です。管理者に連絡してください。', 
-            flags: 64 
+            ephemeral: true
         });
     }
     
     if (member.roles.cache.has(VERIFIED_ROLE_ID)) {
-        return interaction.reply({ content: 'すでに認証済みです。', flags: 64 });
+        return interaction.reply({ content: 'すでに認証済みです。', ephemeral: true });
     }
 
     const moderationChannel = await interaction.client.channels.fetch(MODERATION_CHANNEL_ID).catch(() => null);
     if (!moderationChannel) {
         console.error(`[ERROR] Moderation channel not found: ${MODERATION_CHANNEL_ID}`);
-        return interaction.reply({ content: 'エラーが発生しました。管理者に連絡してください。', flags: 64 });
+        return interaction.reply({ content: 'エラーが発生しました。管理者に連絡してください。', ephemeral: true });
     }
 
     const embed = new EmbedBuilder()
@@ -66,13 +66,13 @@ async function handleVerifyUser(interaction) {
         await moderationChannel.send({ embeds: [embed], components: [actionRow] });
         return interaction.reply({ 
             content: '✅ 認証申請を送信しました。管理者の承認をお待ちください。', 
-            flags: 64 
+            ephemeral: true
         });
     } catch (error) {
         console.error('[ERROR] Failed to send moderation message:', error);
         return interaction.reply({ 
             content: 'エラー: 認証申請の送信に失敗しました。管理者に連絡してください。', 
-            flags: 64 
+            ephemeral: true
         });
     }
 }
@@ -83,17 +83,17 @@ async function handleApproval(interaction, userId) {
     if (!ADMIN_ROLE_ID || !VERIFIED_ROLE_ID) {
         return interaction.reply({ 
             content: 'エラー: 認証システムの設定が不完全です。', 
-            flags: 64 
+            ephemeral: true
         });
     }
 
     if (!member.roles.cache.has(ADMIN_ROLE_ID)) {
-        return interaction.reply({ content: 'この操作を行う権限がありません。', flags: 64 });
+        return interaction.reply({ content: 'この操作を行う権限がありません。', ephemeral: true });
     }
 
     const targetMember = await guild.members.fetch(userId).catch(() => null);
     if (!targetMember) {
-        return interaction.reply({ content: '対象ユーザーが見つかりませんでした。', flags: 64 });
+        return interaction.reply({ content: '対象ユーザーが見つかりませんでした。', ephemeral: true });
     }
 
     const originalMessage = interaction.message;
@@ -106,21 +106,21 @@ async function handleApproval(interaction, userId) {
         // Check bot permissions
         const botMember = guild.members.me;
         if (!botMember.permissions.has('ManageRoles')) {
-            await interaction.reply({ content: 'ボットに「ロールの管理」権限がありません。', flags: 64 });
+            await interaction.reply({ content: 'ボットに「ロールの管理」権限がありません。', ephemeral: true });
             return;
         }
 
         // Check role hierarchy
         const verifiedRole = guild.roles.cache.get(VERIFIED_ROLE_ID);
         if (!verifiedRole) {
-            await interaction.reply({ content: '認証ロールが見つかりません。環境変数を確認してください。', flags: 64 });
+            await interaction.reply({ content: '認証ロールが見つかりません。環境変数を確認してください。', ephemeral: true });
             return;
         }
 
         if (botMember.roles.highest.position <= verifiedRole.position) {
             await interaction.reply({ 
                 content: `ボットのロールが認証ロール (${verifiedRole.name}) より下位にあるため、ロールを付与できません。ボットのロールを上位に移動してください。`, 
-                flags: 64 
+                ephemeral: true
             });
             return;
         }
@@ -158,9 +158,9 @@ async function handleApproval(interaction, userId) {
         }
         
         if (!interaction.replied && !interaction.deferred) {
-            await interaction.reply({ content: errorMessage, flags: 64 });
+            await interaction.reply({ content: errorMessage, ephemeral: true });
         } else {
-            await interaction.followUp({ content: errorMessage, flags: 64 });
+            await interaction.followUp({ content: errorMessage, ephemeral: true });
         }
     }
 }
@@ -171,12 +171,12 @@ async function handleDenial(interaction, userId) {
     if (!ADMIN_ROLE_ID) {
         return interaction.reply({ 
             content: 'エラー: 認証システムの設定が不完全です。', 
-            flags: 64 
+            ephemeral: true
         });
     }
 
     if (!member.roles.cache.has(ADMIN_ROLE_ID)) {
-        return interaction.reply({ content: 'この操作を行う権限がありません。', flags: 64 });
+        return interaction.reply({ content: 'この操作を行う権限がありません。', ephemeral: true });
     }
     
     const targetMember = await guild.members.fetch(userId).catch(() => null);
@@ -233,7 +233,7 @@ export async function handleButtonInteraction(interaction) {
         } else {
             console.warn(`[WARNING] Unknown button interaction: ${customId}`);
             if (!interaction.replied && !interaction.deferred) {
-                await interaction.reply({ content: '不明なボタンが押されました。', flags: 64 });
+                await interaction.reply({ content: '不明なボタンが押されました。', ephemeral: true });
             }
         }
     } catch (error) {
@@ -241,9 +241,9 @@ export async function handleButtonInteraction(interaction) {
 
         const errorMessage = 'ボタン操作中にエラーが発生しました。';
         if (!interaction.replied && !interaction.deferred) {
-            await interaction.reply({ content: errorMessage, flags: 64 }).catch(() => {});
+            await interaction.reply({ content: errorMessage, ephemeral: true }).catch(() => {});
         } else {
-            await interaction.followUp({ content: errorMessage, flags: 64 }).catch(() => {});
+            await interaction.followUp({ content: errorMessage, ephemeral: true }).catch(() => {});
         }
     }
 }

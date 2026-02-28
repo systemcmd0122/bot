@@ -102,29 +102,45 @@ async function updateBanListMessage(channel, guild) {
 
         // データファイルからメッセージIDを取得
         const banData = loadBanData();
-        const messageId = banData.banListMessageId;
-
+        let messageId = banData.banListMessageId;
         let message;
+
         if (messageId) {
-            // 既存のメッセージを更新
             try {
                 message = await channel.messages.fetch(messageId);
-                await message.edit({ embeds: [embed] });
-                console.log(`[INFO] Updated ban list message (ID: ${messageId})`);
             } catch (error) {
-                // メッセージが見つからない場合は新規作成
-                console.log(`[WARNING] Ban list message not found, creating new one`);
-                message = await channel.send({ embeds: [embed] });
+                console.log(`[WARNING] Ban list message ${messageId} not found in channel.`);
+                messageId = null;
+            }
+        }
+
+        // メッセージIDがない場合、チャンネル内の既存のボットメッセージから探す
+        if (!messageId) {
+            console.log('[INFO] Searching for existing ban list message in channel...');
+            const messages = await channel.messages.fetch({ limit: 50 });
+            message = messages.find(m =>
+                m.author.id === guild.members.me.id &&
+                m.embeds.length > 0 &&
+                m.embeds[0].title === '🚫 BANユーザーリスト'
+            );
+
+            if (message) {
+                console.log(`[INFO] Found existing ban list message: ${message.id}`);
                 banData.banListMessageId = message.id;
                 saveBanData(banData);
-                console.log(`[INFO] Created new ban list message (ID: ${message.id})`);
             }
+        }
+
+        if (message) {
+            // 既存のメッセージを更新
+            await message.edit({ embeds: [embed] });
+            console.log(`[INFO] Updated ban list message (ID: ${message.id})`);
         } else {
             // 新規メッセージを作成
             message = await channel.send({ embeds: [embed] });
             banData.banListMessageId = message.id;
             saveBanData(banData);
-            console.log(`[INFO] Created ban list message (ID: ${message.id})`);
+            console.log(`[INFO] Created new ban list message (ID: ${message.id})`);
         }
 
         return message;
