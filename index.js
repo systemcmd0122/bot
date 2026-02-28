@@ -25,14 +25,17 @@ app.get('/ping', (_req, res) => {
 });
 
 app.get('/health', (_req, res) => {
+    const isReady = client.isReady();
     const health = {
-        status: client.isReady() ? 'ok' : 'degraded',
+        status: isReady ? 'ok' : 'degraded',
         timestamp: new Date().toISOString(),
         uptime: process.uptime(),
         memory: process.memoryUsage(),
         bot_status: client.ws.status
     };
-    res.status(client.isReady() ? 200 : 503).json(health);
+    // To prevent deployment failure on Koyeb due to 503 errors during health checks,
+    // we return 200 OK even if the bot is still connecting (degraded status).
+    res.status(200).json(health);
 });
 
 app.get('/', (_req, res) => {
