@@ -10,7 +10,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pip3 install --break-system-packages "yt-dlp==2025.6.9" yt-dlp-get-pot-bgutil
+RUN pip3 install --break-system-packages "yt-dlp==2025.6.9" bgutil-ytdlp-pot-provider
 
 RUN curl -fsSL https://deno.land/install.sh | sh
 
