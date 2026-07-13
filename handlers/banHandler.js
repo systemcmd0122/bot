@@ -9,6 +9,7 @@ import { EmbedBuilder } from 'discord.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'url';
+import { logAction } from '../utils/logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = path.dirname(__filename);
@@ -173,6 +174,8 @@ async function banUser(guild, userId, reason, executor) {
 
         console.log(`[INFO] BAN実行: ${user.tag} (${userId}) | 理由: ${reason} | 実行者: ${executor.tag}`);
 
+        logAction(guild, { action: 'BAN', executor, target: user, details: reason }).catch(() => {});
+
         return {
             success: true,
             message: `✅ **${user.tag}** (<@${userId}>) をBANしました。\n📝 理由: ${reason}`,
@@ -202,6 +205,8 @@ async function unbanUser(guild, userId, executor) {
         await guild.members.unban(userId, `BAN解除 | 実行者: ${executor.tag}`);
 
         console.log(`[INFO] BAN解除: ${ban.user.tag} (${userId}) | 実行者: ${executor.tag}`);
+
+        logAction(guild, { action: 'UNBAN', executor, target: ban.user }).catch(() => {});
 
         return {
             success: true,

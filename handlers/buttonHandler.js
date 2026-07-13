@@ -6,6 +6,7 @@
 
 import 'dotenv/config';
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
+import { logAction } from '../utils/logger.js';
 
 // --- 環境変数の読み込み ---
 const MODERATION_CHANNEL_ID = process.env.MODERATION_CHANNEL_ID;
@@ -192,6 +193,8 @@ async function handleApproval(interaction, userId) {
 
         console.log(`[INFO] 認証承認: ${targetMember.user.tag} (${targetMember.id}) | 承認者: ${member.user.tag}`);
 
+        logAction(guild, { action: 'VERIFY', executor: member.user, target: targetMember.user, details: '認証承認' }).catch(() => {});
+
     } catch (err) {
         console.error('[ERROR] ロール付与失敗:', err);
 
@@ -260,8 +263,12 @@ async function handleDenial(interaction, userId) {
         }
 
         console.log(`[INFO] 認証拒否: ${targetMember.user.tag} (${targetMember.id}) | 拒否者: ${member.user.tag}`);
+
+        logAction(guild, { action: 'VERIFY', executor: member.user, target: targetMember.user, details: '認証拒否' }).catch(() => {});
     } else {
         console.log(`[INFO] 認証拒否: ユーザーID ${userId} (サーバー外) | 拒否者: ${member.user.tag}`);
+
+        logAction(guild, { action: 'VERIFY', executor: member.user, details: `認証拒否 (ユーザーID: ${userId}, サーバー外)` }).catch(() => {});
     }
 }
 

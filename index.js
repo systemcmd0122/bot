@@ -6,6 +6,7 @@ import { REST } from '@discordjs/rest';
 import { Routes } from 'discord-api-types/v10';
 import { fileURLToPath } from 'url';
 import express from 'express';
+import { initAuditLogger } from './utils/logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -260,6 +261,9 @@ client.once('ready', async () => {
 
     // Keep-Alive 開始
     startKeepAlive();
+
+    // 監査ログ監視開始
+    initAuditLogger(client);
 
     console.log('[SUCCESS] ✓ Bot初期化完了。全システム稼働中。');
 });
