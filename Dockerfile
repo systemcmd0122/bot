@@ -23,10 +23,12 @@ WORKDIR /app
 
 COPY package.json package-lock.json ./
 RUN npm install --omit=dev
+RUN npm ls @snazzah/davey @snazzah/davey-linux-x64-gnu libsodium-wrappers @discordjs/voice 2>&1 || true
 
 COPY . .
 
 ENV NODE_ENV=production
+ENV DEBUG=""
 
 EXPOSE 8000
 
