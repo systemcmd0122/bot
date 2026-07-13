@@ -22,12 +22,13 @@ export const data = new SlashCommandBuilder()
     );
 
 export async function execute(interaction) {
+    await interaction.deferReply();
+
     const voiceChannel = interaction.member.voice.channel;
 
     if (!voiceChannel) {
-        return interaction.reply({
+        return interaction.editReply({
             content: '❌ 先にボイスチャンネルに参加してください。',
-            ephemeral: true
         });
     }
 
@@ -35,24 +36,20 @@ export async function execute(interaction) {
     const permissions = voiceChannel.permissionsFor(botMember);
 
     if (!permissions?.has(PermissionFlagsBits.Connect) || !permissions?.has(PermissionFlagsBits.Speak)) {
-        return interaction.reply({
+        return interaction.editReply({
             content: '❌ ボイスチャンネルへの「接続」または「発言」権限がありません。',
-            ephemeral: true
         });
     }
 
     // 既に再生中で、別のVCにいる場合は拒否
     const existingQueue = interaction.client.distube.getQueue(interaction.guildId);
     if (existingQueue && existingQueue.voiceChannel.id !== voiceChannel.id) {
-        return interaction.reply({
+        return interaction.editReply({
             content: `❌ ボットは既に <#${existingQueue.voiceChannel.id}> で再生中です。`,
-            ephemeral: true
         });
     }
 
     const query = interaction.options.getString('query', true);
-
-    await interaction.deferReply();
 
     // 処理が長引いている場合、ユーザーに「まだ動いている」ことが分かるよう
     // 定期的にメッセージを更新する（無音で固まっているように見えるのを防ぐ）
