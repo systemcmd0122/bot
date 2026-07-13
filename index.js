@@ -1,65 +1,14 @@
 import 'dotenv/config';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { Client, Collection, GatewayIntentBits, InteractionType } from 'discord.js';
 import { REST } from '@discordjs/rest';
 import { Routes } from 'discord-api-types/v10';
 import { fileURLToPath } from 'url';
 import express from 'express';
-import { DisTube } from 'distube';
-import { YtDlpPlugin } from '@distube/yt-dlp';
-import { SpotifyPlugin } from '@distube/spotify';
-import { SoundCloudPlugin } from '@distube/soundcloud';
-import ffmpegPath from 'ffmpeg-static';
-import { buildNowPlayingEmbed, buildNowPlayingComponents, buildDisabledComponents, refreshNowPlayingPanel, toFriendlyErrorMessage } from './utils/musicUI.js';
-import { isMusicButton, handleMusicButtonInteraction } from './handlers/musicButtonHandler.js';
-import { execSync } from 'node:child_process';
-
-// ==============================================
-// ffmpeg パス解決
-// システムffmpegを優先使用（ffmpeg-staticは古い場合がある）
-// ==============================================
-function resolveFfmpegPath() {
-    // 1. 環境変数で指定があれば最優先
-    if (process.env.FFMPEG_PATH && fs.existsSync(process.env.FFMPEG_PATH)) {
-        console.log(`[INFO] 環境変数のffmpegを使用: ${process.env.FFMPEG_PATH}`);
-        return process.env.FFMPEG_PATH;
-    }
-    // 2. システムffmpegを検索 (Windows: where / Linux・macOS: which)
-    try {
-        const findCmd = process.platform === 'win32' ? 'where ffmpeg' : 'which ffmpeg';
-        const sysFfmpeg = execSync(findCmd, { encoding: 'utf-8', timeout: 5000 }).trim().split('\n')[0].trim();
-        if (sysFfmpeg && fs.existsSync(sysFfmpeg)) {
-            console.log(`[INFO] システムffmpegを使用: ${sysFfmpeg}`);
-            return sysFfmpeg;
-        }
-    } catch {}
-    // 3. フォールバック: ffmpeg-static
-    if (ffmpegPath && fs.existsSync(ffmpegPath)) {
-        console.log(`[INFO] ffmpeg-staticを使用: ${ffmpegPath}`);
-        return ffmpegPath;
-    }
-    console.warn('[WARNING] ffmpegが見つかりません。音声再生に問題が発生する可能性があります。');
-    return 'ffmpeg';
-}
-const resolvedFfmpegPath = resolveFfmpegPath();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
-// ==============================================
-// Deno PATH設定 (yt-dlpのn-challenge解決に必須)
-// yt-dlpは子プロセスでDenoを探し出すため、
-// 親プロセスのPATHにDenoのパスを含める必要がある
-// (Windows: %USERPROFILE%\.deno\bin / Linux・macOS: $HOME/.deno/bin)
-// ==============================================
-const denoBinPath = path.join(os.homedir(), '.deno', 'bin');
-const pathSeparator = process.platform === 'win32' ? ';' : ':';
-if (!process.env.PATH.includes(denoBinPath)) {
-    process.env.PATH = `${denoBinPath}${pathSeparator}${process.env.PATH}`;
-    console.log(`[INFO] DenoをPATHに追加: ${denoBinPath}`);
-}
 
 // ==============================================
 // 環境変数チェック (起動時に即座に検証)
@@ -150,8 +99,6 @@ function startKeepAlive() {
         }
     };
 
-    // 即座に1回送信後、50秒ごとに送信
-    // (Koyebの無料枠はリクエストがないとスリープするため短めに設定)
     sendPing();
     setInterval(sendPing, 50_000);
 
@@ -168,261 +115,10 @@ const client = new Client({
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.MessageContent,
         GatewayIntentBits.GuildModeration,
-        GatewayIntentBits.GuildVoiceStates, // VC再生に必須
     ]
 });
 
 client.commands = new Collection();
-
-// ==============================================
-// DisTube (音楽再生システム) セットアップ
-// YouTube / Spotify / SoundCloud に対応
-// Spotifyは直接オーディオを取得できないため、
-// トラック情報を解決して同名曲をYouTube上で検索・再生する
-// ==============================================
-
-// yt-dlp設定ファイルの存在チェック
-// Windows: %APPDATA%\yt-dlp\config / Linux・macOS: ~/.config/yt-dlp/config
-const ytdlpConfigPath = process.platform === 'win32'
-    ? path.join(process.env.APPDATA || '', 'yt-dlp', 'config')
-    : path.join(os.homedir(), '.config', 'yt-dlp', 'config');
-if (fs.existsSync(ytdlpConfigPath)) {
-    console.log(`[INFO] yt-dlp設定ファイルを検出: ${ytdlpConfigPath}`);
-} else {
-    console.warn('[WARNING] yt-dlp設定ファイルが見つかりません。YouTube再生が不安定になる可能性があります。');
-    console.warn(`[WARNING] 作成先: ${ytdlpConfigPath}`);
-}
-
-// Deno (yt-dlpのn-challenge解決に必須) の存在チェック
-try {
-    const denoExeName = process.platform === 'win32' ? 'deno.exe' : 'deno';
-    const denoExe = path.join(os.homedir(), '.deno', 'bin', denoExeName);
-    const denoVersion = execSync(`"${denoExe}" --version`, { encoding: 'utf-8', timeout: 5000 }).split('\n')[0];
-    console.log(`[INFO] Deno検出: ${denoVersion}（YouTube n-challenge解決に使用）`);
-} catch {
-    console.warn('[WARNING] Denoが見つかりません。YouTube再生が大幅に遅くなる可能性があります。');
-    console.warn('[WARNING] インストール: irm https://deno.land/install.ps1 | iex');
-    console.warn('[WARNING] 参照: https://github.com/yt-dlp/yt-dlp/wiki/EJS');
-}
-
-// ==============================================
-// 実際にBotが使用するyt-dlpバイナリのバージョンをログ出力
-// (.env の YTDLP_DIR / YTDLP_FILENAME で system yt-dlp を指すよう
-//  設定している場合、その実体を明示的に確認するための診断ログ)
-// ==============================================
-try {
-    if (process.env.YTDLP_DISABLE_DOWNLOAD === 'true' && process.env.YTDLP_DIR) {
-        const defaultYtdlpName = process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp';
-        const usedYtdlp = path.join(process.env.YTDLP_DIR, process.env.YTDLP_FILENAME || defaultYtdlpName);
-        if (fs.existsSync(usedYtdlp)) {
-            const ver = execSync(`"${usedYtdlp}" --version`, { encoding: 'utf-8', timeout: 5000 }).trim();
-            console.log(`[INFO] Bot実行時のyt-dlp: ${usedYtdlp} (v${ver})`);
-        } else {
-            console.warn(`[WARNING] YTDLP_DIR/YTDLP_FILENAME で指定されたyt-dlpが見つかりません: ${usedYtdlp}`);
-        }
-    } else {
-        console.log('[INFO] yt-dlpはプラグイン管理のバイナリを使用します（YTDLP_DISABLE_DOWNLOAD未設定）。');
-    }
-} catch (err) {
-    console.warn('[WARNING] yt-dlpバージョン確認に失敗:', err.message);
-}
-
-const distube = new DisTube(client, {
-    emitNewSongOnly: true,
-    emitAddSongWhenCreatingQueue: false,
-    emitAddListWhenCreatingQueue: false,
-    savePreviousSongs: true,
-    nsfw: false,
-    joinNewVoiceChannel: true,
-    ffmpeg: {
-        path: resolvedFfmpegPath,
-        args: {
-            // 入力ストリームへの接続が途切れても自動で再接続を試みる。
-            // 特にreconnect_streamedはシーク不可なHTTPストリーム(googlevideo等)で
-            // 必須のオプション。これが無いと接続瞬断時にffmpegがそのままクラッシュする。
-            input: {
-                reconnect: '1',
-                reconnect_streamed: '1',
-                reconnect_on_network_error: '1',
-                reconnect_delay_max: '5'
-            }
-        }
-    },
-    plugins: [
-        new SpotifyPlugin(
-            process.env.SPOTIFY_CLIENT_ID && process.env.SPOTIFY_CLIENT_SECRET
-                ? {
-                      api: {
-                          clientId: process.env.SPOTIFY_CLIENT_ID,
-                          clientSecret: process.env.SPOTIFY_CLIENT_SECRET
-                      }
-                  }
-                : undefined
-        ),
-        new SoundCloudPlugin(),
-        new YtDlpPlugin({
-            // .env で YTDLP_DISABLE_DOWNLOAD=true を設定している場合、
-            // プラグインは自前でバイナリを管理せず、
-            // YTDLP_DIR / YTDLP_FILENAME で指定した既存のyt-dlpをそのまま使う。
-            // これにより `pip install -U yt-dlp` で更新したバージョンと、
-            // Botが実際に使うバージョンを一致させる。
-            update: process.env.YTDLP_DISABLE_DOWNLOAD === 'true' ? false : true,
-            ytdlpOptions: {
-                // opus/webm(itag=251等)のデコードで特定動画がクラッシュする事例があるため、
-                // より枯れているAAC(m4a)系フォーマットを優先的に選択する。
-                format: 'bestaudio[ext=m4a]/bestaudio[acodec=aac]/bestaudio'
-            }
-        })
-    ]
-});
-
-client.distube = distube;
-
-// ==============================================
-// 再生パネルの自動更新（リアルタイム性向上）
-// 曲の再生中、数秒おきにプログレスバー等を再描画する。
-// ボタン/コマンド操作による即時更新とは独立して動く保険的な仕組みで、
-// 万一取りこぼしても次のtickで自然に追いつく。
-// ==============================================
-const NOW_PLAYING_REFRESH_MS = 10_000;
-const nowPlayingIntervals = new Map(); // guildId -> IntervalID
-
-function getGuildIdFromQueue(queue) {
-    return queue?.textChannel?.guild?.id ?? queue?.voiceChannel?.guild?.id ?? null;
-}
-
-function stopNowPlayingInterval(guildId) {
-    if (!guildId) return;
-    const timer = nowPlayingIntervals.get(guildId);
-    if (timer) {
-        clearInterval(timer);
-        nowPlayingIntervals.delete(guildId);
-    }
-}
-
-function startNowPlayingInterval(queue) {
-    const guildId = getGuildIdFromQueue(queue);
-    if (!guildId) return;
-
-    // 曲が変わるたびに古いタイマーは必ず止めてから新しく張り直す（二重更新防止）
-    stopNowPlayingInterval(guildId);
-
-    const timer = setInterval(async () => {
-        // キューが既に破棄されている、または一時停止中は何もしない
-        // (一時停止中に更新すると表示上の時間だけが進んでしまうため)
-        if (!queue || queue.stopped || !queue.songs?.length || queue.paused) return;
-        await refreshNowPlayingPanel(queue);
-    }, NOW_PLAYING_REFRESH_MS);
-
-    nowPlayingIntervals.set(guildId, timer);
-}
-
-distube.on('playSong', async (queue, song) => {
-    const embed = buildNowPlayingEmbed(queue, song);
-    const components = buildNowPlayingComponents(queue);
-
-    // 直前のパネルが残っていれば、誤操作防止のためボタンを無効化しておく
-    if (queue.nowPlayingMessage) {
-        await queue.nowPlayingMessage.edit({ components: buildDisabledComponents(components) }).catch(() => {});
-    }
-
-    const sent = await queue.textChannel?.send({ embeds: [embed], components }).catch(() => null);
-    queue.nowPlayingMessage = sent ?? null;
-
-    startNowPlayingInterval(queue);
-});
-
-distube.on('addSong', (queue, song) => {
-    queue.textChannel?.send(`✅ キューに追加しました: **${song.name}** - \`${song.formattedDuration}\``).catch(() => {});
-});
-
-distube.on('addList', (queue, playlist) => {
-    queue.textChannel?.send(`✅ プレイリスト **${playlist.name}** (${playlist.songs.length}曲) をキューに追加しました。`).catch(() => {});
-});
-
-distube.on('finish', async queue => {
-    stopNowPlayingInterval(getGuildIdFromQueue(queue));
-    if (queue.nowPlayingMessage) {
-        await queue.nowPlayingMessage.edit({ components: buildDisabledComponents(buildNowPlayingComponents(queue)) }).catch(() => {});
-    }
-    queue.textChannel?.send('🏁 キューの再生が終了しました。').catch(() => {});
-});
-
-distube.on('empty', queue => {
-    stopNowPlayingInterval(getGuildIdFromQueue(queue));
-    queue.textChannel?.send('👋 ボイスチャンネルに誰もいなくなったため退出します。').catch(() => {});
-});
-
-distube.on('disconnect', queue => {
-    stopNowPlayingInterval(getGuildIdFromQueue(queue));
-    queue.textChannel?.send('🔌 ボイスチャンネルから切断しました。').catch(() => {});
-});
-
-// ==============================================
-// 再生エラー処理
-// FFMPEG_EXITEDのような一過性の可能性があるクラッシュは、
-// いきなり諦めずに同じ曲を1回だけ自動リトライしてから、
-// それでもダメな場合のみ次の曲へスキップする。
-// (同一曲の連続リトライ回数はメモリ上のMapで管理)
-// ==============================================
-const retryCounts = new Map();
-const MAX_RETRIES = 1;
-
-distube.on('error', async (error, queue, song) => {
-    console.error('[ERROR] DisTube エラー:', error);
-
-    const channel = queue?.textChannel;
-    if (!channel) return;
-
-    const friendlyMessage = toFriendlyErrorMessage(error);
-    const failedSongLabel = song?.name ? `**${song.name}**\n` : '';
-
-    const songKey = song?.id ?? song?.url;
-    const isRetryableCrash = error?.errorCode === 'FFMPEG_EXITED';
-    const currentRetries = songKey ? (retryCounts.get(songKey) ?? 0) : MAX_RETRIES;
-
-    if (isRetryableCrash && songKey && currentRetries < MAX_RETRIES && queue?.voiceChannel) {
-        retryCounts.set(songKey, currentRetries + 1);
-        channel.send(`${failedSongLabel}⚠️ 再生中に問題が発生しました。もう一度だけ自動で再試行します…`).catch(() => {});
-
-        try {
-            await distube.play(queue.voiceChannel, song, {
-                textChannel: queue.textChannel,
-                member: song.member
-            });
-            return;
-        } catch (retryErr) {
-            console.error('[ERROR] リトライも失敗:', retryErr);
-            // リトライも失敗した場合は下の通常のスキップ処理へフォールスルー
-        }
-    }
-
-    if (songKey) retryCounts.delete(songKey);
-
-    if (queue && queue.songs.length > 1) {
-        channel.send(`${failedSongLabel}${friendlyMessage}\n➡️ 次の曲へ自動的にスキップします。`).catch(() => {});
-        queue.skip().catch(skipErr => {
-            console.error('[ERROR] 自動スキップに失敗:', skipErr);
-        });
-    } else {
-        stopNowPlayingInterval(getGuildIdFromQueue(queue));
-        channel.send(`${failedSongLabel}${friendlyMessage}`).catch(() => {});
-    }
-});
-
-distube.on('searchNoResult', (message, query) => {
-    const channel = message?.channel ?? message;
-    if (channel?.send) {
-        channel.send(`🔍 \`${query}\` に一致する結果が見つかりませんでした。`).catch(() => {});
-    }
-});
-
-// 詳細ログ（既定では無効）。.env に DEBUG_MUSIC=true を設定すると、
-// yt-dlp/ffmpegの内部動作をコンソールに出力し、再生が固まる原因の切り分けに使える。
-if (process.env.DEBUG_MUSIC === 'true') {
-    distube.on('debug', message => console.log('[DISTUBE DEBUG]', message));
-    distube.on('ffmpegDebug', message => console.log('[FFMPEG DEBUG]', message));
-}
 
 // ==============================================
 // コマンドファイル読み込み (commands/ フォルダ)
@@ -543,37 +239,6 @@ client.once('ready', async () => {
     console.log(`[SUCCESS] ログイン完了: ${client.user.tag}`);
     console.log(`[INFO]    Bot ID: ${client.user.id}`);
     console.log(`[INFO]    参加サーバー数: ${client.guilds.cache.size}`);
-
-    // DAVE / 音声関連の依存関係チェック
-    try {
-        const davey = await import('@snazzah/davey').catch(() => null);
-        if (davey) {
-            console.log(`[INFO]    @snazzah/davey: v${davey.DAVE_PROTOCOL_VERSION ?? 'unknown'}`);
-        } else {
-            console.warn('[WARNING] @snazzah/davey が見つかりません。DAVE暗号化が無効です。');
-        }
-    } catch (e) {
-        console.warn('[WARNING] @snazzah/davey import error:', e.message);
-    }
-    try {
-        await import('@discordjs/opus');
-        console.log('[INFO]    @discordjs/opus: OK (native)');
-    } catch {
-        try {
-            await import('opusscript');
-            console.log('[INFO]    opusscript: OK (fallback)');
-        } catch {
-            console.warn('[WARNING] Opusエンコーダーが見つかりません。');
-        }
-    }
-    try {
-        const sodium = await import('libsodium-wrappers');
-        await sodium.ready;
-        console.log('[INFO]    libsodium-wrappers: OK');
-    } catch (e) {
-        console.warn('[WARNING] libsodium-wrappers error:', e.message);
-    }
-
     console.log('='.repeat(60));
 
     // Expressサーバー起動
@@ -622,13 +287,6 @@ client.on('interactionCreate', async interaction => {
 
         // ボタン
         if (interaction.isButton()) {
-            // 音楽再生パネルのボタン（customId: "music_..."）は専用ハンドラで処理する。
-            // 認証ボタン等、既存のボタンとはcustomIdのプレフィックスで完全に分離されている。
-            if (isMusicButton(interaction.customId)) {
-                await handleMusicButtonInteraction(interaction);
-                return;
-            }
-
             if (handleButtonInteraction) {
                 await handleButtonInteraction(interaction);
             } else {
@@ -696,27 +354,12 @@ client.on('shardResume', (shardId, replayedEvents) => {
     console.log(`[INFO] Shard ${shardId} 再接続完了。リプレイイベント数: ${replayedEvents}`);
 });
 
-// ==============================================
-// ボイス接続デバッグ (VOICE_CONNECT_FAILED 診断用)
-// ==============================================
-client.on('raw', packet => {
-    if (packet.t === 'VOICE_STATE_UPDATE') {
-        if (packet.d.user_id === client.user.id) {
-            console.log(`[VOICE] VOICE_STATE_UPDATE | channel: ${packet.d.channel_id ?? 'null (disconnect)'} | session: ${packet.d.session_id}`);
-        }
-    }
-    if (packet.t === 'VOICE_SERVER_UPDATE') {
-        console.log(`[VOICE] VOICE_SERVER_UPDATE | guild: ${packet.d.guild_id} | endpoint: ${packet.d.endpoint}`);
-    }
-});
-
 process.on('unhandledRejection', err => {
     console.error('[ERROR] 未処理のPromise拒否:', err);
 });
 
 process.on('uncaughtException', err => {
     console.error('[ERROR] 未キャッチの例外:', err);
-    // Koyebが自動的に再起動するためプロセスを終了
     process.exit(1);
 });
 
