@@ -7,6 +7,7 @@ import { Routes } from 'discord-api-types/v10';
 import { fileURLToPath } from 'url';
 import express from 'express';
 import { initAuditLogger } from './utils/logger.js';
+import { initAfkDetector } from './handlers/afkHandler.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -116,6 +117,7 @@ const client = new Client({
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.MessageContent,
         GatewayIntentBits.GuildModeration,
+        GatewayIntentBits.GuildVoiceStates,
     ]
 });
 
@@ -264,6 +266,9 @@ client.once('ready', async () => {
 
     // 監査ログ監視開始
     initAuditLogger(client);
+
+    // AFK自動検出開始
+    initAfkDetector(client);
 
     console.log('[SUCCESS] ✓ Bot初期化完了。全システム稼働中。');
 });
