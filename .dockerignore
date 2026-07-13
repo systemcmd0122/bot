@@ -1,0 +1,6 @@
+node_modules
+.git
+.env
+data/ban_data.json
+*.md
+.gitignore
