@@ -543,6 +543,37 @@ client.once('ready', async () => {
     console.log(`[SUCCESS] ログイン完了: ${client.user.tag}`);
     console.log(`[INFO]    Bot ID: ${client.user.id}`);
     console.log(`[INFO]    参加サーバー数: ${client.guilds.cache.size}`);
+
+    // DAVE / 音声関連の依存関係チェック
+    try {
+        const davey = await import('@snazzah/davey').catch(() => null);
+        if (davey) {
+            console.log(`[INFO]    @snazzah/davey: v${davey.DAVE_PROTOCOL_VERSION ?? 'unknown'}`);
+        } else {
+            console.warn('[WARNING] @snazzah/davey が見つかりません。DAVE暗号化が無効です。');
+        }
+    } catch (e) {
+        console.warn('[WARNING] @snazzah/davey import error:', e.message);
+    }
+    try {
+        await import('@discordjs/opus');
+        console.log('[INFO]    @discordjs/opus: OK (native)');
+    } catch {
+        try {
+            await import('opusscript');
+            console.log('[INFO]    opusscript: OK (fallback)');
+        } catch {
+            console.warn('[WARNING] Opusエンコーダーが見つかりません。');
+        }
+    }
+    try {
+        const sodium = await import('libsodium-wrappers');
+        await sodium.ready;
+        console.log('[INFO]    libsodium-wrappers: OK');
+    } catch (e) {
+        console.warn('[WARNING] libsodium-wrappers error:', e.message);
+    }
+
     console.log('='.repeat(60));
 
     // Expressサーバー起動
@@ -663,6 +694,20 @@ client.on('shardReconnecting', shardId => {
 
 client.on('shardResume', (shardId, replayedEvents) => {
     console.log(`[INFO] Shard ${shardId} 再接続完了。リプレイイベント数: ${replayedEvents}`);
+});
+
+// ==============================================
+// ボイス接続デバッグ (VOICE_CONNECT_FAILED 診断用)
+// ==============================================
+client.on('raw', packet => {
+    if (packet.t === 'VOICE_STATE_UPDATE') {
+        if (packet.d.user_id === client.user.id) {
+            console.log(`[VOICE] VOICE_STATE_UPDATE | channel: ${packet.d.channel_id ?? 'null (disconnect)'} | session: ${packet.d.session_id}`);
+        }
+    }
+    if (packet.t === 'VOICE_SERVER_UPDATE') {
+        console.log(`[VOICE] VOICE_SERVER_UPDATE | guild: ${packet.d.guild_id} | endpoint: ${packet.d.endpoint}`);
+    }
 });
 
 process.on('unhandledRejection', err => {

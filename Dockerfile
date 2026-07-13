@@ -8,6 +8,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     unzip \
     ca-certificates \
     git \
+    build-essential \
     && rm -rf /var/lib/apt/lists/*
 
 RUN pip3 install --break-system-packages "yt-dlp==2025.6.9" bgutil-ytdlp-pot-provider
@@ -32,8 +33,13 @@ RUN mkdir -p /root/.config/yt-dlp && \
 WORKDIR /app
 
 COPY package.json package-lock.json ./
-RUN npm install --omit=dev
-RUN npm ls @snazzah/davey libsodium-wrappers @discordjs/voice 2>&1 || true
+RUN npm install --omit=dev --include=optional && \
+    echo "=== davey check ===" && \
+    node --input-type=commonjs -e "try { const d = require('@snazzah/davey'); console.log('davey OK, version:', d.DAVE_PROTOCOL_VERSION); } catch(e) { console.error('davey FAIL:', e.message); }" && \
+    echo "=== libsodium check ===" && \
+    node --input-type=commonjs -e "try { require('libsodium-wrappers'); console.log('libsodium OK'); } catch(e) { console.error('libsodium FAIL:', e.message); }" && \
+    echo "=== opus check ===" && \
+    node --input-type=commonjs -e "try { require('@discordjs/opus'); console.log('@discordjs/opus OK (native)'); } catch(e) { console.error('@discordjs/opus:', e.message); try { require('opusscript'); console.log('opusscript OK (fallback)'); } catch(e2) { console.error('opusscript FAIL:', e2.message); } }"
 
 COPY . .
 
