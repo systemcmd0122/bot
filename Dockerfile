@@ -9,6 +9,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     git \
     build-essential \
+    pkg-config \
+    libcairo2-dev \
+    libjpeg-dev \
+    libpango1.0-dev \
+    libgif-dev \
+    librsvg2-dev \
     && rm -rf /var/lib/apt/lists/*
 
 RUN pip3 install --break-system-packages "yt-dlp==2025.6.9" bgutil-ytdlp-pot-provider
@@ -20,7 +26,8 @@ ENV PATH="$DENO_INSTALL/bin:$PATH"
 
 RUN git clone https://github.com/Brainicism/bgutil-ytdlp-pot-provider.git /root/bgutil-ytdlp-pot-provider && \
     cd /root/bgutil-ytdlp-pot-provider/server && \
-    deno install
+    deno install && \
+    deno add npm:canvas
 
 RUN mkdir -p /root/.config/yt-dlp && \
     printf '%s\n' \
