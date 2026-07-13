@@ -9,7 +9,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pip3 install --break-system-packages yt-dlp
+RUN pip3 install --break-system-packages "yt-dlp==2025.6.9"
+
+RUN mkdir -p /root/.config/yt-dlp && \
+    printf '%s\n' '--extractor-args' 'youtube:player_client=ios,web' > /root/.config/yt-dlp/config
 
 RUN curl -fsSL https://deno.land/install.sh | sh
 
